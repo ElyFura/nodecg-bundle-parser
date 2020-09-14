@@ -1,119 +1,339 @@
-/* jshint -W030 */
 'use strict';
 
-var parseBundle = require('../index');
-var chai = require('chai');
-var expect = chai.expect;
-chai.should();
+const parseBundle = require('../index');
+const path = require('path');
+const assert = require('chai').assert;
 
-describe('bundle parser', function () {
-    it('should return "undefined" when nodecg.json does not exist', function () {
-        expect(parseBundle('./test')).to.be.undefined;
-    });
+describe('main bundle parsing', () => {
+	it('should error when package.json does not exist', () => {
+		assert.throws(parseBundle.bind(parseBundle, './test'), /does not contain a package.json!/);
+	});
 
-    it('should return the expected data when nodecg.json does exist', function () {
-        var parsedBundle = parseBundle('./test/test_bundles/good-bundle');
-        parsedBundle.name.should.equal('test-bundle');
-        parsedBundle.version.should.equal('0.0.1');
-        parsedBundle.description.should.equal('A test bundle');
-        parsedBundle.homepage.should.equal('http://github.com/nodecg');
-        parsedBundle.authors.should.deep.equal(['Alex Van Camp <email@alexvan.camp>', 'Matt McNamara']);
-        parsedBundle.license.should.equal('MIT');
-        parsedBundle.nodecgDependency.should.equal('~0.7.0');
-        parsedBundle.extension.should.deep.equal({path: 'extension.js'});
-        expect(parsedBundle.bundleDependencies).to.be.undefined;
-        parsedBundle.rawManifest.should.be.a.string;
-        parsedBundle.dir.should.be.a.string;
-        parsedBundle.dashboard.dir.should.be.a.string;
-        parsedBundle.dashboard.panels.should.deep.equal([{
-            name: 'test',
-            title: 'Test Panel',
-            width: 1,
-            file: 'panel.html',
-            dialog: false
-        }]);
-        parsedBundle.display.dir.should.be.a.string;
-    });
+	it('should error when package.json has no "nodecg" property', () => {
+		assert.throws(parseBundle.bind(parseBundle, './test/fixtures/no-nodecg-prop'),
+			/lacks a "nodecg" property, and therefore cannot be parsed/);
+	});
 
-    context('when bundleCfgPath is provided', function() {
-        context('and the file exists', function() {
-            it('should parse the config and add it as bundle.config', function() {
-                var parsedBundle = parseBundle('./test/test_bundles/good-bundle',
-                    './test/test_bundles/good-bundle/bundleConfig.json');
-                parsedBundle.config.should.deep.equal({foo: 'foo'});
-            });
-        });
+	it('should error when package.json is not valid JSON', () => {
+		assert.throws(parseBundle.bind(parseBundle, './test/fixtures/invalid-manifest-json'),
+			/package.json is not valid JSON/);
+	});
 
-        context('and the file does not exist', function() {
-            it('should throw an error', function() {
-                expect(
-                    parseBundle.bind(parseBundle, './test/test_bundles/good-bundle', './made/up/path.json')
-                ).to.throw(/does not exist/);
-            });
-        });
+	it('should return the expected data when "nodecg" property does exist', () => {
+		const parsedBundle = parseBundle('./test/fixtures/good-bundle');
+		assert.equal(parsedBundle.name, 'good-bundle');
+		assert.equal(parsedBundle.version, '0.0.1');
+		assert.equal(parsedBundle.description, 'A test bundle');
+		assert.equal(parsedBundle.homepage, 'http://github.com/nodecg');
+		assert.equal(parsedBundle.author, 'Alex Van Camp <email@alexvan.camp>');
+		assert.equal(parsedBundle.enableCustomCues, false);
+		assert.deepEqual(parsedBundle.contributors, ['Matt McNamara']);
+		assert.equal(parsedBundle.license, 'MIT');
+		assert.equal(parsedBundle.compatibleRange, '~0.7.0');
+		assert.isUndefined(parsedBundle.bundleDependencies);
+		assert.isString(parsedBundle.rawManifest);
+		assert.isString(parsedBundle.dir);
+		assert.deepEqual(parsedBundle.dependencies, {commander: '^2.6.0'});
+		assert.isString(parsedBundle.dashboard.dir);
+		assert.deepEqual(parsedBundle.dashboard.panels, [
+			{
+				name: 'test',
+				title: 'Test Panel',
+				width: 1,
+				headerColor: '#9f9bbd',
+				path: path.resolve(__dirname, './fixtures/good-bundle/dashboard/panel.html'),
+				file: 'panel.html',
+				html: '<!DOCTYPE html>\n<head></head>\n<body>\n<p>This is a test panel!</p>\n<script>' +
+				'\n    window.parent.dashboardApi = window.nodecg;\n</script>\n</body>\n',
+				dialog: false,
+				bundleName: 'good-bundle',
+				workspace: 'default',
+				fullbleed: false
+			},
+			{
+				name: 'test-workspace-panel',
+				title: 'Test Workspace Panel',
+				width: 1,
+				headerColor: '#ffffff',
+				path: path.resolve(__dirname, './fixtures/good-bundle/dashboard/workspace-panel.html'),
+				file: 'workspace-panel.html',
+				html: '<!DOCTYPE html>\n<head></head>\n<body>\n<p>This is a test panel that goes into a test ' +
+				'workspace!</p>\n</body>\n',
+				dialog: false,
+				bundleName: 'good-bundle',
+				workspace: 'foo',
+				fullbleed: false
+			},
+			{
+				name: 'test-fullbleed-panel',
+				title: 'Test Fullbleed Panel',
+				width: 1,
+				headerColor: '#9f9bbd',
+				path: path.resolve(__dirname, './fixtures/good-bundle/dashboard/fullbleed-panel.html'),
+				file: 'fullbleed-panel.html',
+				html: '<!DOCTYPE html>\n<head></head>\n<body>\n<p>This is a test fullbleed panel!</p>\n</body>\n',
+				dialog: false,
+				bundleName: 'good-bundle',
+				fullbleed: true,
+				workspace: 'default'
+			},
+			{
+				name: 'test-dialog',
+				title: 'Test Dialog',
+				width: 3,
+				headerColor: '#333222',
+				path: path.resolve(__dirname, './fixtures/good-bundle/dashboard/dialog.html'),
+				file: 'dialog.html',
+				html: '<!DOCTYPE html>\n<head></head>\n<body>\n<p>This is a test dialog!</p>\n</body>\n',
+				dialog: true,
+				bundleName: 'good-bundle',
+				fullbleed: false
+			}
+		]);
+		assert.isArray(parsedBundle.graphics);
+		assert.isTrue(parsedBundle.hasExtension);
+		assert.deepEqual(parsedBundle.soundCues, [{
+			name: 'name-only',
+			assignable: true
+		}, {
+			name: 'default-volume',
+			defaultVolume: 80,
+			assignable: true
+		}, {
+			name: 'non-assignable',
+			assignable: false
+		}, {
+			name: 'default-file',
+			defaultFile: '../default-file.ogg',
+			assignable: true
+		}]);
+	});
 
-        context('and the file isn\'t valid JSON', function() {
-            it('should throw an error', function() {
-                expect(
-                    parseBundle.bind(parseBundle, './test/test_bundles/bad-json',
-                        './test/test_bundles/bad-json/bundleConfig.json')
-                ).to.throw(/Ensure that it is valid JSON/);
-            });
-        });
-    });
+	it('should error when "nodecg.compatibleRange" is not a valid semver range', () => {
+		assert.throws(parseBundle.bind(parseBundle, './test/fixtures/no-compatible-range'),
+			/does not have a valid "nodecg.compatibleRange"/);
+	});
 
-    context('when there is no "dashboard" folder', function() {
-        it('should assign an empty array to bundle.dashboard.panels', function() {
-            var parsedBundle = parseBundle('./test/test_bundles/no-dashboard-folder');
-            parsedBundle.dashboard.panels.should.be.an.instanceof(Array).and.be.empty;
-        });
-    });
+	it('should error when both "extension.js" and a directory named "extension" exist', () => {
+		assert.throws(parseBundle.bind(parseBundle, './test/fixtures/double-extension'),
+			/has both "extension.js" and a folder named "extension"/);
+	});
 
-    context('when there is a "dashboard" folder but no "panels.json"', function() {
-        it('should throw an error', function() {
-            expect(
-                parseBundle.bind(parseBundle, './test/test_bundles/no-panelsjson')
-            ).to.throw(/"dashboard\/panels.json" was not found/);
-        });
-    });
+	it('should error when "extension" exists and it is not a directory', () => {
+		assert.throws(parseBundle.bind(parseBundle, './test/fixtures/illegal-extension'),
+			/has an illegal file named "extension"/);
+	});
 
-    context('when "panels.json" isn\'t valid JSON', function() {
-        it('should throw an error', function() {
-            expect(
-                parseBundle.bind(parseBundle, './test/test_bundles/bad-json')
-            ).to.throw(/"dashboard\/panels.json" could not be read/);
-        });
-    });
+	it('should error when the bundle\'s folder name doesn\'t match its manifest name', () => {
+		assert.throws(parseBundle.bind(parseBundle, './test/fixtures/bad-folder-name'),
+			/Please rename it to "/);
+	});
+});
 
-    context('when critical properties are missing from "panels.json"', function() {
-        it('should throw an error explaining what is missing', function() {
-            expect(
-                parseBundle.bind(parseBundle, './test/test_bundles/missing-panel-props')
-            ).to.throw(/the following properties: name, title, file/);
-        });
-    });
+describe('config parsing', () => {
+	context('when the config file exists', () => {
+		it('should parse the config and add it as bundle.config', () => {
+			const parsedBundle = parseBundle('./test/fixtures/good-bundle',
+				'./test/fixtures/good-bundle/bundleConfig.json');
+			assert.deepEqual(parsedBundle.config, {foo: 'foo'});
+		});
 
-    context('when two panels have the same name', function() {
-        it('should throw an error', function() {
-            expect(
-                parseBundle.bind(parseBundle, './test/test_bundles/dupe-panel-name')
-            ).to.throw(/has the same name as another panel/);
-        });
-    });
+		it('should set default values if the config doesn\'t define them', () => {
+			const parsedBundle = parseBundle('./test/fixtures/config-defaults');
+			assert.deepEqual(parsedBundle.config, {foo: 'foo'});
+		});
+	});
 
-    context('when a panel\'s file has no <head> tag', function() {
-        it('should throw an error', function() {
-            expect(
-                parseBundle.bind(parseBundle, './test/test_bundles/no-head')
-            ).to.throw(/has no <head>/);
-        });
-    });
+	context('when the config file does not exist', () => {
+		it('should throw an error', () => {
+			assert.throws(parseBundle.bind(parseBundle, './test/fixtures/good-bundle', './made/up/path.json'),
+				/does not exist/);
+		});
+	});
 
-    context('when a panel\'s file has no <!DOCTYPE>', function() {
-        it('should throw an error', function() {
-            expect(
-                parseBundle.bind(parseBundle, './test/test_bundles/no-doctype')
-            ).to.throw(/has no DOCTYPE/);
-        });
-    });
+	context('when the config file isn\'t valid JSON', () => {
+		it('should throw an error', () => {
+			const fn = parseBundle.bind(parseBundle, './test/fixtures/bad-json',
+				'./test/fixtures/bad-json/bundleConfig.json');
+			assert.throws(fn, /Ensure that it is valid JSON/);
+		});
+	});
+});
+
+describe('config validation', () => {
+	context('when the schema file exists', () => {
+		it('should not throw when the config passes validation', () => {
+			const fn = parseBundle.bind(parseBundle, './test/fixtures/config-validation',
+				'./test/fixtures/config-validation/validConfig.json');
+			assert.doesNotThrow(fn);
+		});
+
+		it('should throw when the config fails validation', () => {
+			const fn = parseBundle.bind(parseBundle, './test/fixtures/config-validation',
+				'./test/fixtures/config-validation/invalidConfig.json');
+			assert.throws(fn, /is invalid:/);
+		});
+
+		// Smoke test for https://github.com/chute/json-schema-defaults/issues/10
+		it('should properly merge configs that have arrays of objects', () => {
+			const parsedBundle = parseBundle('./test/fixtures/config-schema-array-of-objects',
+				'./test/fixtures/config-schema-array-of-objects/bundleConfig.json');
+			assert.deepEqual(parsedBundle.config, {
+				gameAudioChannels: [
+					{sd: 17, hd: 25},
+					{sd: 19, hd: 27},
+					{sd: 21, hd: null},
+					{sd: 23, hd: null}
+				]
+			});
+		});
+	});
+
+	context('when the schema file does not exist', () => {
+		it('should skip validation and not throw an error', () => {
+			const fn = parseBundle.bind(parseBundle, './test/fixtures/good-bundle',
+				'./test/fixtures/good-bundle/bundleConfig.json');
+			assert.doesNotThrow(fn);
+		});
+	});
+
+	context('when the schema file isn\'t valid JSON', () => {
+		it('should throw an error', () => {
+			const fn = parseBundle.bind(parseBundle, './test/fixtures/bad-schema',
+				'./test/fixtures/bad-schema/bundleConfig.json');
+			assert.throws(fn, /configschema.json for bundle /);
+		});
+	});
+});
+
+describe('dashboard panel parsing', () => {
+	context('when there is no "dashboard" folder', () => {
+		it('should assign an empty array to bundle.dashboard.panels', () => {
+			const parsedBundle = parseBundle('./test/fixtures/no-panels');
+			assert.isArray(parsedBundle.dashboard.panels);
+			assert.lengthOf(parsedBundle.dashboard.panels, 0);
+		});
+	});
+
+	context('when there is a "dashboard" folder but no "dashboardPanels" property', () => {
+		it('should throw an error', () => {
+			assert.throws(parseBundle.bind(parseBundle, './test/fixtures/no-panels-prop'),
+				/no "nodecg.dashboardPanels" property was found/);
+		});
+	});
+
+	context('when there is a "dashboardPanels" property but no "dashboard" folder', () => {
+		it('should throw an error', () => {
+			assert.throws(parseBundle.bind(parseBundle, './test/fixtures/no-dashboard-folder'),
+				/but no "dashboard" folder/);
+		});
+	});
+
+	context('when critical properties are missing from the "dashboardPanels" property', () => {
+		it('should throw an error explaining what is missing', () => {
+			assert.throws(parseBundle.bind(parseBundle, './test/fixtures/missing-panel-props'),
+				/the following properties: name, title, file/);
+		});
+	});
+
+	context('when two panels have the same name', () => {
+		it('should throw an error', () => {
+			assert.throws(parseBundle.bind(parseBundle, './test/fixtures/dupe-panel-name'),
+				/has the same name as another panel/);
+		});
+	});
+
+	context('when a panel\'s file has no <head> tag', () => {
+		it('should throw an error', () => {
+			assert.throws(parseBundle.bind(parseBundle, './test/fixtures/no-head'),
+				/has no <head>/);
+		});
+	});
+
+	context('when a panel\'s file has no <!DOCTYPE>', () => {
+		it('should throw an error', () => {
+			assert.throws(parseBundle.bind(parseBundle, './test/fixtures/no-doctype'),
+				/has no DOCTYPE/);
+		});
+	});
+
+	context('when a panel\'s file does not exist', () => {
+		it('should throw an error', () => {
+			assert.throws(parseBundle.bind(parseBundle, './test/fixtures/non-existant-panel'),
+				/ does not exist/);
+		});
+	});
+
+	context('when a dialog has a workspace', () => {
+		it('should throw an error', () => {
+			assert.throws(parseBundle.bind(parseBundle, './test/fixtures/dialog-workspace'),
+				/Dialogs don't get put into workspaces/);
+		});
+	});
+
+	context('when a dialog is fullbleed', () => {
+		it('should throw an error', () => {
+			assert.throws(parseBundle.bind(parseBundle, './test/fixtures/dialog-fullbleed'),
+				/Fullbleed panels cannot be dialogs/);
+		});
+	});
+
+	context('when a fullbleed panel has a workspace', () => {
+		it('should throw an error', () => {
+			assert.throws(parseBundle.bind(parseBundle, './test/fixtures/fullbleed-workspace'),
+				/Fullbleed panels are not allowed to define a workspace/);
+		});
+	});
+
+	context('when a fullbleed panel has a defined width', () => {
+		it('should throw an error', () => {
+			assert.throws(parseBundle.bind(parseBundle, './test/fixtures/fullbleed-width'),
+				/Fullbleed panels have their width set based on the/);
+		});
+	});
+
+	context('when a panel has a workspace that begins with __nodecg', () => {
+		it('should throw an error', () => {
+			assert.throws(parseBundle.bind(parseBundle, './test/fixtures/reserved-workspace__nodecg'),
+				/whose name begins with __nodecg, which is a reserved string/);
+		});
+	});
+});
+
+describe('dashboard graphic parsing', () => {
+	context('when there is no "graphics" folder', () => {
+		it('should assign an empty array to bundle.graphics', () => {
+			const parsedBundle = parseBundle('./test/fixtures/no-graphics');
+			assert.isArray(parsedBundle.graphics);
+			assert.lengthOf(parsedBundle.graphics, 0);
+		});
+	});
+
+	context('when there is a "graphics" folder but no "graphics" property', () => {
+		it('should throw an error', () => {
+			assert.throws(parseBundle.bind(parseBundle, './test/fixtures/no-graphics-prop'),
+				/no "nodecg.graphics" property was found/);
+		});
+	});
+
+	context('when there is a "graphics" property but no "graphics" folder', () => {
+		it('should throw an error', () => {
+			assert.throws(parseBundle.bind(parseBundle, './test/fixtures/no-graphics-folder'),
+				/but no "graphics" folder/);
+		});
+	});
+
+	context('when critical properties are missing from the "graphics" property', () => {
+		it('should throw an error explaining what is missing', () => {
+			assert.throws(parseBundle.bind(parseBundle, './test/fixtures/missing-graphic-props'),
+				/the following properties: file, width, height/);
+		});
+	});
+
+	context('when two graphics have the same file', () => {
+		it('should throw an error', () => {
+			assert.throws(parseBundle.bind(parseBundle, './test/fixtures/dupe-graphic-file'),
+				/has the same file as another graphic/);
+		});
+	});
 });

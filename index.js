@@ -1,41 +1,63 @@
 'use strict';
 
-var fs = require('fs');
-var path = require('path');
-var debug = require('debug')('nodecg:bundle-parser');
-var parsePanels = require('./lib/panels');
-var parseManifest = require('./lib/manifest');
-var parseConfig = require('./lib/config');
+const fs = require('fs');
+const path = require('path');
+const parsePanels = require('./lib/panels');
+const parseGraphics = require('./lib/graphics');
+const parseManifest = require('./lib/manifest');
+const parseAssets = require('./lib/assets');
+const parseSounds = require('./lib/sounds');
+const config = require('./lib/config');
+const parseExtension = require('./lib/extension');
 
 module.exports = function (bundlePath, bundleCfgPath) {
-    // resolve the path to the bundle and its nodecg.json
-    var manifestPath = path.join(bundlePath, 'nodecg.json');
+	// Resolve the path to the bundle and its package.json
+	const pkgPath = path.join(bundlePath, 'package.json');
 
-    // TODO: Should this throw an error instead?
-    // Return undefined if nodecg.json doesn't exist
-    if (!fs.existsSync(manifestPath)) return;
+	if (!fs.existsSync(pkgPath)) {
+		throw new Error(`Bundle at path ${bundlePath} does not contain a package.json!`);
+	}
 
-    debug('Discovered bundle in folder %s', bundlePath);
+	// Read metadata from the package.json
+	let pkg;
+	try {
+		pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+	} catch (e) {
+		throw new Error(`${pkgPath} is not valid JSON, ` +
+			'please check it against a validator such as jsonlint.com');
+	}
 
-    // Read metadata from the nodecg.json manifest file
-    var manifest = parseManifest(manifestPath);
-    var bundle = manifest;
-    bundle.rawManifest = JSON.stringify(manifest);
-    bundle.dir = bundlePath;
+	const bundle = parseManifest(pkg, bundlePath);
+	bundle.rawManifest = JSON.stringify(bundle);
+	bundle.dir = bundlePath;
 
-    // If there is a config file for this bundle, parse it
-    if (bundleCfgPath) {
-        bundle.config = parseConfig(bundleCfgPath);
-    }
+	// If there is a config file for this bundle, parse it.
+	// Else if there is only a configschema for this bundle, parse that and apply any defaults.
+	if (bundleCfgPath) {
+		bundle.config = config.parse(bundle, bundleCfgPath);
+	} else {
+		bundle.config = config.parseDefaults(bundle);
+	}
 
-    bundle.dashboard = {
-        dir: path.resolve(bundle.dir, 'dashboard'),
-        panels: parsePanels(path.resolve(bundle.dir, 'dashboard/panels.json'))
-    };
+	// Parse the dashboard panels
+	const dashboardDir = path.resolve(bundle.dir, 'dashboard');
+	bundle.dashboard = {
+		dir: dashboardDir,
+		panels: parsePanels(dashboardDir, bundle)
+	};
 
-    bundle.display = {
-        dir: path.join(bundle.dir, 'display')
-    };
+	// Parse the graphics
+	const graphicsDir = path.resolve(bundle.dir, 'graphics');
+	bundle.graphics = parseGraphics(graphicsDir, bundle);
 
-    return bundle;
+	// Parse asset categories
+	bundle.assetCategories = parseAssets(pkg);
+
+	// Parse sound cues
+	parseSounds(bundle, pkg);
+
+	// Determine if this bundle has an extension that should be loaded by NodeCG
+	bundle.hasExtension = parseExtension(bundle.dir, bundle);
+
+	return bundle;
 };
