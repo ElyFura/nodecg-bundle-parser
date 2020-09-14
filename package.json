@@ -1,0 +1,48 @@
+{
+    "name": "nodecg-bundle-parser",
+    "version": "0.0.1",
+    "description": "NodeCG's bundle parser",
+    "main": "index.js",
+    "directories": {
+      "test": "test"
+    },
+    "files": [
+      "AUTHORS",
+      "LICENSE",
+      "README.md",
+      "CHANGELOG.md",
+      "index.js",
+      "lib/"
+    ],
+    "dependencies": {
+      "chai": "^3.2.0",
+      "cheerio": "^0.19.0",
+      "debug": "^2.2.0"
+    },
+    "devDependencies": {
+      "coveralls": "^2.11.3",
+      "istanbul": "^0.3.17",
+      "lcov-filter": "0.0.3",
+      "mocha": "^2.2.5",
+      "mocha-lcov-reporter": "0.0.2"
+    },
+    "scripts": {
+      "test": "istanbul cover node_modules/mocha/bin/_mocha -- -R spec",
+      "coveralls": "node node_modules/lcov-filter/index.js coverage/lcov.info test | coveralls && rm -rf coverage"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://lange@github.com/nodecg/nodecg-bundle-parser.git"
+    },
+    "keywords": [
+      "nodecg",
+      "bundle",
+      "parser"
+    ],
+    "author": "Alex Van Camp <email@alexvan.camp>",
+    "license": "MIT",
+    "bugs": {
+      "url": "https://github.com/nodecg/nodecg-bundle-parser/issues"
+    },
+    "homepage": "https://github.com/nodecg/nodecg-bundle-parser#readme"
+  }
